@@ -12,6 +12,15 @@ import collections
 from typing import Optional, List, Dict, Any
 import logging
 
+def download_file(local_file, download_url):
+    with requests.get(download_url, stream=True) as r:
+        r.raise_for_status()
+        total_size = int(r.headers.get('content-length', 0))
+        with open(local_file, 'wb') as f, tqdm(desc=local_file.name, total=total_size, unit='iB', unit_scale=True, unit_divisor=1024) as bar:
+            for chunk in r.iter_content(chunk_size=8192):
+                size = f.write(chunk)
+                bar.update(size)
+
 class RerankRequest:
     """ Represents a reranking request with a query and a list of passages. 
     
@@ -99,13 +108,7 @@ class Ranker:
         local_zip_file = self.cache_dir / f"{model_name}.zip"
         formatted_model_url = model_url.format(model_name)
         
-        with requests.get(formatted_model_url, stream=True) as r:
-            r.raise_for_status()
-            total_size = int(r.headers.get('content-length', 0))
-            with open(local_zip_file, 'wb') as f, tqdm(desc=local_zip_file.name, total=total_size, unit='iB', unit_scale=True, unit_divisor=1024) as bar:
-                for chunk in r.iter_content(chunk_size=8192):
-                    size = f.write(chunk)
-                    bar.update(size)
+        download_file(local_zip_file, formatted_model_url)
 
         with zipfile.ZipFile(local_zip_file, 'r') as zip_ref:
             zip_ref.extractall(self.cache_dir)
@@ -117,30 +120,26 @@ class Ranker:
         Args:
             model_name (str): The name of the model to download.
         """
-        # breakpoint()
+        has_onnx = False
         if not self.model_dir.exists():
             self.model_dir.mkdir(parents=True, exist_ok=True)
         local_model_path = self.model_dir / f"{model_name.split('/')[-1]}.onnx"
-        formatted_model_url = hf_model_url.format(model_name, "onnx/model_quantized.onnx")
-        with requests.get(formatted_model_url, stream=True) as r:
-            r.raise_for_status()
-            total_size = int(r.headers.get('content-length', 0))
-            with open(local_model_path, 'wb') as f, tqdm(desc=local_model_path.name, total=total_size, unit='iB', unit_scale=True, unit_divisor=1024) as bar:
-                for chunk in r.iter_content(chunk_size=8192):
-                    size = f.write(chunk)
-                    bar.update(size)
-
+        for onnx in ["onnx/model.onnx", "onnx/model_quantized.onnx"]:
+            formatted_model_url = hf_model_url.format(model_name, onnx)
+            try:
+                download_file(local_model_path, formatted_model_url)
+                has_onnx = True
+                break
+            except requests.exceptions.HTTPError as e:
+                self.logger.warning(f"Could not download {onnx} for model {model_name}. Error: {e}")
+                continue
+        if not has_onnx:
+            raise FileNotFoundError(f"ONNX model file not found for model {model_name} in the Hugging Face repository.")
+        
         for req_file in required_files:
             formatted_artifacts_url = hf_model_url.format(model_name, req_file)
             local_file_path = self.model_dir / req_file
-            with requests.get(formatted_artifacts_url, stream=True) as r:
-                r.raise_for_status()
-                total_size = int(r.headers.get('content-length', 0))
-                with open(local_file_path, 'wb') as f, tqdm(desc=local_file_path.name, total=total_size, unit='iB', unit_scale=True, unit_divisor=1024) as bar:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        size = f.write(chunk)
-                        bar.update(size)
-        
+            download_file(local_file_path, formatted_artifacts_url)
         
 
     def _get_tokenizer(self, max_length: int = 512) -> Tokenizer:
