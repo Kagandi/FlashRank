@@ -136,7 +136,7 @@ ranker = Ranker(model_name="rank_zephyr_7b_v1_full", max_length=1024) # adjust m
 
 or
 
-# Medium (~90MB), fast multilangual model with competitive performance on diverse datasets
+# Medium (~90MB), fast modern model with competitive performance on diverse datasets
 ranker = Ranker(model_name="mixedbread-ai/mxbai-rerank-xsmall-v1", cache_dir="/opt")
 
 
