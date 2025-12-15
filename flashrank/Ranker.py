@@ -124,7 +124,7 @@ class Ranker:
         if not self.model_dir.exists():
             self.model_dir.mkdir(parents=True, exist_ok=True)
         local_model_path = self.model_dir / f"{model_name.split('/')[-1]}.onnx"
-        for onnx in ["onnx/model.onnx", "onnx/model_quantized.onnx"]:
+        for onnx in ["onnx/model_quantized.onnx", "onnx/model_uint8.onnx", "onnx/model_O4.onnx","onnx/model_fp16.onnx", "onnx/model.onnx"]:
             formatted_model_url = hf_model_url.format(model_name, onnx)
             try:
                 download_file(local_model_path, formatted_model_url)
